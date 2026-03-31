@@ -19,6 +19,11 @@ jobs:
           POSTGRES_PASSWORD: mohan123
         ports:
           - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v3
@@ -29,5 +34,26 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build and test
-        run: mvn clean verify
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build
+        run: mvn clean package -DskipTests
+
+      - name: Run tests
+        run: mvn test
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/minis3
+          SPRING_DATASOURCE_USERNAME: mohan
+          SPRING_DATASOURCE_PASSWORD: mohan123
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
