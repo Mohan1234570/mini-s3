@@ -1,4 +1,4 @@
-package mini_s3.krish.dto;
+package mini_s3.krish.bucket.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

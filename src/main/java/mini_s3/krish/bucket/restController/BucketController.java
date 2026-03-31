@@ -1,9 +1,9 @@
-package mini_s3.krish.restController;
+package mini_s3.krish.bucket.restController;
 
 import lombok.RequiredArgsConstructor;
-import mini_s3.krish.dto.ApiResponse;
-import mini_s3.krish.entity.Bucket;
-import mini_s3.krish.service.BucketService;
+import mini_s3.krish.bucket.dto.ApiResponse;
+import mini_s3.krish.bucket.entity.Bucket;
+import mini_s3.krish.bucket.service.BucketService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

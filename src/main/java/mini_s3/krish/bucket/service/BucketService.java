@@ -1,9 +1,9 @@
-package mini_s3.krish.service;
+package mini_s3.krish.bucket.service;
 
 
 import lombok.RequiredArgsConstructor;
-import mini_s3.krish.entity.Bucket;
-import mini_s3.krish.repo.BucketRepository;
+import mini_s3.krish.bucket.entity.Bucket;
+import mini_s3.krish.bucket.repo.BucketRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
