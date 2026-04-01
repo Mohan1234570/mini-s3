@@ -1,4 +1,4 @@
-package mini_s3.krish.object;
+package mini_s3.krish.object.entity;
 
 
 import jakarta.persistence.*;
