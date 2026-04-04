@@ -1,7 +1,6 @@
 package mini_s3.object;
 
 
-
 import mini_s3.krish.bucket.entity.Bucket;
 import mini_s3.krish.bucket.repo.BucketRepository;
 import mini_s3.krish.object.config.StorageProperties;
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -32,10 +30,9 @@ class StorageObjectServiceTest {
     BucketRepository bucketRepository;
     @Mock
     StorageObjectRepository objectRepository;
-    @Mock
-    StorageProperties storageProperties;
 
-    @InjectMocks
+    // Real object — NOT a mock
+    StorageProperties storageProperties;
     StorageObjectService objectService;
 
     @TempDir
@@ -43,12 +40,21 @@ class StorageObjectServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(storageProperties.getBasePath()).thenReturn(tempDir.toString());
+        // Create real StorageProperties — set path directly, no when() needed
+        storageProperties = new StorageProperties();
+        storageProperties.setBasePath(tempDir.toString());
+
+        // Manually wire service — no @InjectMocks
+        objectService = new StorageObjectService(
+                objectRepository, bucketRepository, storageProperties);
+
+        // ⚠️ NO when(storageProperties.getBasePath())... here
+        // storageProperties is a real object, not a mock
+        // calling when() on a real object causes UnnecessaryStubbing
     }
 
     @Test
     void uploadObject_success_savesMetadataAndReturnsEtag() throws IOException {
-        // arrange
         when(bucketRepository.findByName("photos"))
                 .thenReturn(Optional.of(new Bucket()));
         when(objectRepository.findByBucketNameAndObjectKey(any(), any()))
@@ -58,10 +64,9 @@ class StorageObjectServiceTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "photo.jpg", "image/jpeg", "hello".getBytes());
 
-        // act
-        StorageObject result = objectService.uploadObject("photos", "photo.jpg", file);
+        StorageObject result = objectService.uploadObject(
+                "photos", "photo.jpg", file);
 
-        // assert
         assertThat(result.getEtag()).isNotBlank();
         assertThat(result.getSize()).isEqualTo(5L);
         assertThat(result.getContentType()).isEqualTo("image/jpeg");
