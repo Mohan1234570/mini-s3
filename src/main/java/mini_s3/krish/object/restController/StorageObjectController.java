@@ -17,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/objects")
 public class StorageObjectController {
 
     private final StorageObjectService objectService;
