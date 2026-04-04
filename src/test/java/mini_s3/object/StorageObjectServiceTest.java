@@ -9,12 +9,10 @@ import mini_s3.krish.object.repo.StorageObjectRepository;
 import mini_s3.krish.object.service.StorageObjectService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
@@ -26,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)  // ← add this one line
 class StorageObjectServiceTest {
 
     @Mock
@@ -34,6 +31,7 @@ class StorageObjectServiceTest {
     @Mock
     StorageObjectRepository objectRepository;
 
+    // Real object — NOT a mock
     StorageProperties storageProperties;
     StorageObjectService objectService;
 
@@ -42,10 +40,17 @@ class StorageObjectServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Create real StorageProperties — set path directly, no when() needed
         storageProperties = new StorageProperties();
         storageProperties.setBasePath(tempDir.toString());
+
+        // Manually wire service — no @InjectMocks
         objectService = new StorageObjectService(
                 objectRepository, bucketRepository, storageProperties);
+
+        // ⚠️ NO when(storageProperties.getBasePath())... here
+        // storageProperties is a real object, not a mock
+        // calling when() on a real object causes UnnecessaryStubbing
     }
 
     @Test
