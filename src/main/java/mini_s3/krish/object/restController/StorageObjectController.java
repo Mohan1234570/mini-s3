@@ -28,7 +28,6 @@ public class StorageObjectController {
         return path.substring(path.indexOf(bucket) + bucket.length() + 1);
     }
 
-    // PUT /{bucket}/** — upload object (supports nested keys)
     @PostMapping("/{bucket}/**")
     public ResponseEntity<ApiResponse<StorageObject>> uploadObject(
             @PathVariable String bucket,
