@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 @Component
 public class ConsistentHashRouter {
 
-    // Each real node gets this many positions on the ring
     private static final int VIRTUAL_NODES = 150;
 
     // The ring — sorted map of hash → node
