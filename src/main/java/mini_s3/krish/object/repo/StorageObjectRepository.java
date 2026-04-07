@@ -12,7 +12,7 @@ public interface StorageObjectRepository extends JpaRepository<StorageObject, St
 
     List<StorageObject> findAllByBucketName(String bucketName);
 
-    boolean existsByBucketNameAndObjectKey(String bucketName, String objectKey);
+    //boolean existsByBucketNameAndObjectKey(String bucketName, String objectKey);
 
     void deleteByBucketNameAndObjectKey(String bucketName, String objectKey);
 }
