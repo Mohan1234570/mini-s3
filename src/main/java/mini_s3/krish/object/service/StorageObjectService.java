@@ -7,6 +7,7 @@ import mini_s3.krish.bucket.repo.BucketRepository;
 import mini_s3.krish.object.config.StorageProperties;
 import mini_s3.krish.object.entity.StorageObject;
 import mini_s3.krish.object.repo.StorageObjectRepository;
+import mini_s3.krish.replication.ReplicationManager;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class StorageObjectService {
     private final StorageObjectRepository objectRepository;
     private final BucketRepository bucketRepository;
     private final StorageProperties storageProperties;
+    private final ReplicationManager replicationManager;
 
     // ─── Upload ────────────────────────────────────────────────────────────────
 
@@ -70,7 +72,18 @@ public class StorageObjectService {
         StorageObject saved = objectRepository.save(obj);
         log.info("Uploaded object: {}/{} | size={}B | etag={}",
                 bucketName, objectKey, file.getSize(), etag);
-        return saved;
+        // In StorageObjectService.uploadObject() — ADD these lines after save
+        // ← THIS IS MISSING — add it right here
+            replicationManager.replicateObject(
+                    bucketName,
+                    objectKey,
+                    destination.toString(),
+                    "node-1",           // primary node
+                    file.getSize(),
+                    etag
+            );
+    
+            return saved;
     }
 
     // ─── Download ──────────────────────────────────────────────────────────────

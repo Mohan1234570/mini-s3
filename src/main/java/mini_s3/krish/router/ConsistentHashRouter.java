@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 public class ConsistentHashRouter {
 
     private static final int VIRTUAL_NODES = 150;
+    private final Set<String> manuallyDisabled = new HashSet<>();
 
     // The ring — sorted map of hash → node
     // ConcurrentSkipListMap is thread-safe and keeps keys sorted
@@ -68,7 +69,8 @@ public class ConsistentHashRouter {
         StorageNode node = nodes.get(nodeId);
         if (node != null) {
             node.setHealthy(false);
-            log.warn("Marked node {} as UNHEALTHY", nodeId);
+            manuallyDisabled.add(nodeId);   // ← ADD THIS
+            log.warn("Marked node {} as UNHEALTHY (manual)", nodeId);
         }
     }
 
@@ -76,8 +78,14 @@ public class ConsistentHashRouter {
         StorageNode node = nodes.get(nodeId);
         if (node != null) {
             node.setHealthy(true);
+            manuallyDisabled.remove(nodeId);  // ← ADD THIS
             log.info("Marked node {} as HEALTHY", nodeId);
         }
+    }
+
+    // Add this new method — HeartbeatService will call this
+    public synchronized boolean isManuallyDisabled(String nodeId) {
+        return manuallyDisabled.contains(nodeId);
     }
 
     // ── Routing ───────────────────────────────────────────────────────────────
