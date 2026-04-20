@@ -28,10 +28,13 @@ class StorageObjectServiceTest {
 
     @Mock
     BucketRepository bucketRepository;
+
     @Mock
     StorageObjectRepository objectRepository;
 
-    // Real object — NOT a mock
+    @Mock
+    mini_s3.krish.replication.ReplicationManager replicationManager; // ✅ NEW
+
     StorageProperties storageProperties;
     StorageObjectService objectService;
 
@@ -40,17 +43,15 @@ class StorageObjectServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Create real StorageProperties — set path directly, no when() needed
         storageProperties = new StorageProperties();
         storageProperties.setBasePath(tempDir.toString());
 
-        // Manually wire service — no @InjectMocks
         objectService = new StorageObjectService(
-                objectRepository, bucketRepository, storageProperties);
-
-        // ⚠️ NO when(storageProperties.getBasePath())... here
-        // storageProperties is a real object, not a mock
-        // calling when() on a real object causes UnnecessaryStubbing
+                objectRepository,
+                bucketRepository,
+                storageProperties,
+                replicationManager   // ✅ FIXED
+        );
     }
 
     @Test
