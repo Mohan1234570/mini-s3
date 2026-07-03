@@ -4,6 +4,9 @@ package mini_s3.krish.object.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mini_s3.krish.bucket.repo.BucketRepository;
+import mini_s3.krish.cache.MetadataCacheService;
+import mini_s3.krish.cache.ObjectMetadataCache;
+import mini_s3.krish.cache.VersioningService;
 import mini_s3.krish.object.config.StorageProperties;
 import mini_s3.krish.object.entity.StorageObject;
 import mini_s3.krish.object.repo.StorageObjectRepository;
@@ -22,6 +25,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -33,6 +37,10 @@ public class StorageObjectService {
     private final BucketRepository bucketRepository;
     private final StorageProperties storageProperties;
     private final ReplicationManager replicationManager;
+
+    // Add to existing fields in StorageObjectService
+    private final MetadataCacheService cacheService;
+    private final VersioningService versioningService;
 
     // ─── Upload ────────────────────────────────────────────────────────────────
 
@@ -72,39 +80,91 @@ public class StorageObjectService {
         StorageObject saved = objectRepository.save(obj);
         log.info("Uploaded object: {}/{} | size={}B | etag={}",
                 bucketName, objectKey, file.getSize(), etag);
-        // In StorageObjectService.uploadObject() — ADD these lines after save
+        // Create a new version on every upload
+        versioningService.createVersion(
+                bucketName, objectKey,
+                destination.toString(),
+                file.getSize(), etag,
+                obj.getContentType());
+
+        // Cache the metadata in Redis
+        cacheService.put(ObjectMetadataCache.builder()
+                .id(saved.getId())
+                .bucketName(saved.getBucketName())
+                .objectKey(saved.getObjectKey())
+                .size(saved.getSize())
+                .contentType(saved.getContentType())
+                .etag(saved.getEtag())
+                .storagePath(saved.getStoragePath())
+                .createdAt(saved.getCreatedAt())
+                .build());
+
         // ← THIS IS MISSING — add it right here
-            replicationManager.replicateObject(
-                    bucketName,
-                    objectKey,
-                    destination.toString(),
-                    "node-1",           // primary node
-                    file.getSize(),
-                    etag
-            );
+        replicationManager.replicateObject(
+                bucketName,
+                objectKey,
+                destination.toString(),
+                "node-1",           // primary node
+                file.getSize(),
+                etag
+        );
+        return saved;
     
-            return saved;
     }
 
     // ─── Download ──────────────────────────────────────────────────────────────
 
     public ObjectDownload downloadObject(String bucketName,
                                          String objectKey) throws IOException {
+        // 1. Check Redis cache first — fast path
+        Optional<ObjectMetadataCache> cached =
+                cacheService.get(bucketName, objectKey);
 
-        StorageObject obj = objectRepository
-                .findByBucketNameAndObjectKey(bucketName, objectKey)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Object not found: " + bucketName + "/" + objectKey));
+        String storagePath;
+        String contentType;
+        String etag;
+        long size;
 
-        Path filePath = Paths.get(obj.getStoragePath());
+        if (cached.isPresent()) {
+            // Cache HIT — use cached metadata
+            ObjectMetadataCache meta = cached.get();
+            storagePath  = meta.getStoragePath();
+            contentType  = meta.getContentType();
+            etag         = meta.getEtag();
+            size         = meta.getSize();
+            System.out.println("CACHE HIT");
+        } else {
+            // Cache MISS — query PostgreSQL
+            StorageObject obj = objectRepository
+                    .findByBucketNameAndObjectKey(bucketName, objectKey)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Object not found: " + bucketName + "/" + objectKey));
+
+            storagePath  = obj.getStoragePath();
+            contentType  = obj.getContentType();
+            etag         = obj.getEtag();
+            size         = obj.getSize();
+
+            // Populate cache for next request
+            cacheService.put(ObjectMetadataCache.builder()
+                    .id(obj.getId())
+                    .bucketName(obj.getBucketName())
+                    .objectKey(obj.getObjectKey())
+                    .size(obj.getSize())
+                    .contentType(obj.getContentType())
+                    .etag(obj.getEtag())
+                    .storagePath(obj.getStoragePath())
+                    .createdAt(obj.getCreatedAt())
+                    .build());
+        }
+
+        Path filePath = Paths.get(storagePath);
         if (!Files.exists(filePath)) {
-            throw new IllegalStateException(
-                    "File missing on disk: " + filePath);
+            throw new IllegalStateException("File missing: " + filePath);
         }
 
         Resource resource = new UrlResource(filePath.toUri());
-        return new ObjectDownload(resource, obj.getContentType(),
-                obj.getEtag(), obj.getSize());
+        return new ObjectDownload(resource, contentType, etag, size);
     }
 
     // ─── List objects ──────────────────────────────────────────────────────────
@@ -118,17 +178,19 @@ public class StorageObjectService {
 
     // ─── Delete ────────────────────────────────────────────────────────────────
 
-    public void deleteObject(String bucketName, String objectKey) throws IOException {
+    public void deleteObject(String bucketName,
+                             String objectKey) throws IOException {
         StorageObject obj = objectRepository
                 .findByBucketNameAndObjectKey(bucketName, objectKey)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Object not found: " + bucketName + "/" + objectKey));
 
-        // Delete from disk
         Files.deleteIfExists(Paths.get(obj.getStoragePath()));
-
-        // Delete metadata from DB
         objectRepository.deleteByBucketNameAndObjectKey(bucketName, objectKey);
+
+        // Evict from Redis cache
+        cacheService.evict(bucketName, objectKey);
+
         log.info("Deleted object: {}/{}", bucketName, objectKey);
     }
 
