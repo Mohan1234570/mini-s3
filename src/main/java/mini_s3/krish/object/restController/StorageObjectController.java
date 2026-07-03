@@ -3,9 +3,12 @@ package mini_s3.krish.object.restController;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import mini_s3.krish.bucket.dto.ApiResponse;
+import mini_s3.krish.cache.ObjectVersion;
+import mini_s3.krish.cache.VersioningService;
 import mini_s3.krish.object.entity.StorageObject;
 import mini_s3.krish.object.service.StorageObjectService;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +16,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 @RestController
@@ -21,11 +27,21 @@ import java.util.List;
 public class StorageObjectController {
 
     private final StorageObjectService objectService;
+    // Inject versioning service
+    private final VersioningService versioningService;
 
     // 🔹 Utility method to extract key (VERY IMPORTANT)
     private String extractKey(HttpServletRequest request, String bucket) {
-        String path = request.getRequestURI();
-        return path.substring(path.indexOf(bucket) + bucket.length() + 1);
+
+        String prefix = "/objects/" + bucket + "/";
+
+        String uri = request.getRequestURI();
+
+        if (!uri.startsWith(prefix)) {
+            throw new RuntimeException("Invalid object path");
+        }
+
+        return uri.substring(prefix.length());
     }
 
     @PostMapping("/{bucket}/**")
@@ -88,5 +104,45 @@ public class StorageObjectController {
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Object deleted successfully", null)
         );
+    }
+
+
+    @GetMapping(value = "/{bucket}/**", params = "version")
+    public ResponseEntity<Resource> downloadVersion(
+            @PathVariable String bucket,
+            @RequestParam Integer version,
+            HttpServletRequest request) throws IOException {
+
+        String key = extractKey(request, bucket);
+
+        ObjectVersion v =
+                versioningService.getVersion(bucket, key, version);
+
+        Path filePath = Paths.get(v.getStoragePath());
+
+        if (!Files.exists(filePath)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Resource resource = new UrlResource(filePath.toUri());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(v.getContentType()))
+                .contentLength(v.getSize())
+                .header("ETag", v.getEtag())
+                .header("X-Version",
+                        String.valueOf(v.getVersionNumber()))
+                .body(resource);
+    }
+
+    @GetMapping(value = "/{bucket}/**", params = "versions")
+    public ResponseEntity<List<ObjectVersion>> listVersions(
+            @PathVariable String bucket,
+            HttpServletRequest request) {
+
+        String key = extractKey(request, bucket);
+
+        return ResponseEntity.ok(
+                versioningService.listVersions(bucket, key));
     }
 }
