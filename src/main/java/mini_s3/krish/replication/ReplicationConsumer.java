@@ -3,6 +3,7 @@ package mini_s3.krish.replication;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import mini_s3.krish.metrics.StorageMetrics;
 import mini_s3.krish.object.config.StorageProperties;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,8 @@ public class ReplicationConsumer {
 
     private final StorageProperties storageProperties;
     private final ReplicationStateRepository replicationStateRepository;
+
+    private final StorageMetrics metrics;
 
     @KafkaListener(
             topics = KafkaTopicConfig.REPLICATION_TOPIC,
@@ -35,9 +38,11 @@ public class ReplicationConsumer {
                 case DELETE                  -> deleteReplica(event);
             }
             saveReplicationState(event, ReplicationState.Status.COMPLETED);
+            metrics.getReplicationSuccessCounter().increment();
         } catch (Exception e) {
             log.error("Replication failed for {}/{}: {}",
                     event.getBucketName(), event.getObjectKey(), e.getMessage());
+            metrics.getReplicationFailureCounter().increment();
             saveReplicationState(event, ReplicationState.Status.FAILED);
         }
     }

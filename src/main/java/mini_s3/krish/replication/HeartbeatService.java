@@ -2,6 +2,7 @@ package mini_s3.krish.replication;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import mini_s3.krish.metrics.StorageMetrics;
 import mini_s3.krish.object.config.StorageProperties;
 import mini_s3.krish.router.ConsistentHashRouter;
 import mini_s3.krish.router.StorageNode;
@@ -25,6 +26,7 @@ public class HeartbeatService {
     private final ConsistentHashRouter router;
     private final RestTemplate restTemplate;
     private final StorageProperties storageProperties;
+    private final StorageMetrics metrics;
 
     @Value("${replication.heartbeat-miss-threshold:3}")
     private int missingThreshold;
@@ -80,6 +82,9 @@ public class HeartbeatService {
             log.info("Node {} is back ONLINE — restoring to ring",
                     node.getNodeId());
         }
+        // Update healthy node count gauge
+        metrics.getHealthyNodeCount().set(
+                router.getHealthyNodes().size());
     }
 
     private void handleNodeMissedHeartbeat(StorageNode node) {
@@ -93,6 +98,8 @@ public class HeartbeatService {
             router.markNodeUnhealthy(node.getNodeId());
             log.error("Node {} marked UNHEALTHY after {} missed heartbeats",
                     node.getNodeId(), missed);
+            metrics.getHealthyNodeCount().set(
+                    router.getHealthyNodes().size());
         }
     }
 

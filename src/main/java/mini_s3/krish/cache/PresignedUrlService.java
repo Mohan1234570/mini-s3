@@ -3,6 +3,7 @@ package mini_s3.krish.cache;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import mini_s3.krish.metrics.StorageMetrics;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,12 @@ public class PresignedUrlService {
     private long defaultTtlSeconds;
 
     private static final String PREFIX = "presign:";
+
+    // Add field
+    private final StorageMetrics metrics;
+
+
+
 
     // ── Generate presigned URL token ──────────────────────────────────────────
 
@@ -71,6 +78,7 @@ public class PresignedUrlService {
 
         log.info("Generated presigned URL for {}/{} op={} ttl={}s",
                 bucketName, objectKey, operation, expirySeconds);
+        metrics.getPresignedUrlGeneratedCounter().increment();
 
         return new PresignedUrlResponse(presignedUrl, token,
                 expiresAt, operation, expirySeconds);
@@ -116,6 +124,8 @@ public class PresignedUrlService {
                 throw new IllegalArgumentException(
                         "Token not found or already used");
             }
+            // In validate() — after successful validation
+            metrics.getPresignedUrlAccessedCounter().increment();
 
             return presignedToken;
 
